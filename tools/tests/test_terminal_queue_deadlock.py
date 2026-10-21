@@ -61,6 +61,8 @@ class NewTermRootHideQueueTests(unittest.TestCase):
         self.assertNotIn("extension Button: ActionLabelView", ACTION_LABEL_VIEW)
         self.assertIn("public init(toggle boolean: Binding<Bool>", ACTION_LABEL_VIEW)
         self.assertIn("self.init(action: { boolean.wrappedValue.toggle() }, label: label)", ACTION_LABEL_VIEW)
+        self.assertIn("public init(action: @escaping () -> Void, label: Label)", ACTION_LABEL_VIEW)
+        self.assertIn("self.init(action: action, label: { label })", ACTION_LABEL_VIEW)
 
 
 if __name__ == "__main__":

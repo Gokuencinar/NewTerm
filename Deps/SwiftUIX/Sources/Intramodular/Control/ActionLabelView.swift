@@ -132,6 +132,10 @@ extension Button where Label == SwiftUI.Label<Text, Image> {
 // presentation bindings. Retain that small convenience initializer directly,
 // without the ActionLabelView conformance or its recursive Action forwarding.
 extension Button {
+    public init(action: @escaping () -> Void, label: Label) {
+        self.init(action: action, label: { label })
+    }
+
     public init(toggle boolean: Binding<Bool>, @ViewBuilder label: () -> Label) {
         self.init(action: { boolean.wrappedValue.toggle() }, label: label)
     }
