@@ -16,7 +16,9 @@ on:
 jobs:
   build:
     name: Build
-    runs-on: macos-15
+    # Hosted Apple Silicon runners are capacity-constrained in Oct 2026;
+    # build the same iOS arm64e target from an available macOS 15 Intel host.
+    runs-on: macos-15-intel
     steps:
     - name: Checkout
       uses: actions/checkout@v4
