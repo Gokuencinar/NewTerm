@@ -27,7 +27,7 @@ jobs:
         cache: true
         cache-path: ~/__cache
     - name: Set up Theos
-      run: git clone --recursive --depth=1 'https://github.com/theos/theos.git' ~/theos
+      run: git clone --recursive --depth=1 'https://github.com/roothide/theos.git' ~/theos
     - name: Compile
       id: package_build
       run: |

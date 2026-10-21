@@ -104,39 +104,36 @@ class SubProcess {
 		"LC_TERMINAL=NewTerm"
 	]
 
-	private static var userPasswd: passwd? {
-		let length = sysconf(_SC_GETPW_R_SIZE_MAX)
-		let buffer = malloc(length)
-		defer { buffer?.deallocate() }
-
-		var pwd = passwd()
-		var result: UnsafeMutablePointer<passwd>? = UnsafeMutablePointer<passwd>.allocate(capacity: 1)
-		guard ie_getpwuid_r(getuid(), &pwd, buffer, length, &result) == 0 else {
-			return nil
-		}
-		return pwd
-	}
+		// getpwuid_r returns pointers into its caller-owned scratch buffer.
+		// Copy the strings while the buffer is alive; returning passwd by value
+		// made shell/homeDirectory dereference dangling pointers after free().
+		private static let accountInfo: (shell: String, home: String)? = {
+			let requestedSize = sysconf(_SC_GETPW_R_SIZE_MAX)
+			let size = requestedSize > 0 && requestedSize <= 1048576 ? Int(requestedSize) : 16384
+			guard let raw = malloc(size) else { return nil }
+			defer { free(raw) }
+			let buffer = raw.assumingMemoryBound(to: CChar.self)
+			var account = passwd()
+			var result: UnsafeMutablePointer<passwd>? = nil
+			guard ie_getpwuid_r(getuid(), &account, buffer, size, &result) == 0,
+				result != nil else { return nil }
+			let shell = account.pw_shell.map { String(cString: $0) } ?? ""
+			let home = account.pw_dir.map { String(cString: $0) } ?? ""
+			return (shell: shell, home: home)
+		}()
 
 	private static var shell: String {
-		if let result = userPasswd?.pw_shell {
-			return String(cString: jbroot(result))
+			if let result = accountInfo?.shell, !result.isEmpty {
+				return jbroot(result)
 		}
 		return "/bin/bash"
 	}
 
 	private static var homeDirectory: String {
-        let logger = Logger(subsystem: "ws.hbang.Terminal", category: "SubProcess")
-		if let result = userPasswd?.pw_dir {
-            let s:String = String(cString: result);
-            logger.debug("result=\(s, privacy: .public)")
-            
-            let ss:String = jbroot(s);
-            logger.debug("result=\(ss, privacy: .public)")
-			return ss
-            
-		}
-        logger.debug("result=NSHomeDirectory()")
-		return NSHomeDirectory()
+			if let result = accountInfo?.home, !result.isEmpty {
+				return jbroot(result)
+			}
+			return NSHomeDirectory()
 	}
 
 	weak var delegate: SubProcessDelegate?
@@ -157,8 +154,11 @@ class SubProcess {
     private var actived = false
     func activeProcess() {
         if !actived, let pid = childPID {
-            actived = true
-            kill(pid, SIGCONT)
+            if kill(pid, SIGCONT) == 0 {
+                actived = true
+            } else {
+                logger.error("Unable to resume terminal child: \(errno, format: .darwinErrno)")
+            }
         }
     }
 
@@ -218,7 +218,9 @@ class SubProcess {
         posix_spawnattr_setflags(&attr, Int16(POSIX_SPAWN_START_SUSPENDED))
 
 		var pid = pid_t()
-        let result = ie_posix_spawn(&pid, (rootfs(Self.login) as NSString).utf8String, &actions, &attr, argv, envp)
+		// Use the existing hidden RootHide login executable directly. rootfs()
+		// strips its hidden-root prefix and can target a missing stock /usr/bin/login.
+		let result = ie_posix_spawn(&pid, (Self.login as NSString).utf8String, &actions, &attr, argv, envp)
 		close(fds.replica)
 		if result != 0 {
 			// Fork failed.
@@ -244,6 +246,10 @@ class SubProcess {
 		readSource?.activate()
 		signalSource?.activate()
 		delegate!.subProcessDidConnect()
+			// Always resume once the PTY and event sources are ready. Previously
+			// this depended on a later UI resize; unchanged dimensions could keep
+			// the login process suspended for the entire terminal session.
+			activeProcess()
 	}
 
 	func stop(fromError: Bool = false) throws {

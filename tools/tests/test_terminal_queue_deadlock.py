@@ -6,6 +6,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTROLLER = (ROOT / "Common/Controllers/TerminalController.swift").read_text(encoding="utf-8")
+SUBPROCESS = (ROOT / "Common/Controllers/SubProcess.swift").read_text(encoding="utf-8")
+WORKFLOW = (ROOT / ".github/workflows/build.yml").read_text(encoding="utf-8")
 
 
 class NewTermRootHideQueueTests(unittest.TestCase):
@@ -25,6 +27,30 @@ class NewTermRootHideQueueTests(unittest.TestCase):
         self.assertIn("terminalQueue.async", method)
         self.assertIn("self.readInputStream(ColorBars.render", method)
         self.assertIn("@objc private func updateTimerFired()", CONTROLLER)
+
+    def test_passwd_buffer_strings_owned_before_free(self):
+        block = SUBPROCESS.split("private static let accountInfo:", 1)[1].split(
+            "private static var shell:", 1
+        )[0]
+        self.assertIn("var result: UnsafeMutablePointer<passwd>? = nil", block)
+        self.assertIn("result != nil", block)
+        self.assertIn("String(cString: $0)", block)
+        self.assertIn("defer { free(raw) }", block)
+        self.assertNotIn("return pwd", block)
+
+    def test_hidden_login_spawn_and_resume_do_not_depend_on_resize(self):
+        self.assertIn("(Self.login as NSString).utf8String", SUBPROCESS)
+        self.assertNotIn("rootfs(Self.login)", SUBPROCESS)
+        method = SUBPROCESS.split("func start(initialDirectory:", 1)[1].split(
+            "func stop(fromError:", 1
+        )[0]
+        self.assertLess(method.index("signalSource?.activate()"), method.index("activeProcess()"))
+        self.assertIn("if kill(pid, SIGCONT) == 0", SUBPROCESS)
+
+    def test_ci_uses_roothide_theos_and_package_architecture(self):
+        self.assertIn("https://github.com/roothide/theos.git", WORKFLOW)
+        self.assertIn("ROOTHIDE=1", WORKFLOW)
+        self.assertIn("iphoneos-arm64e", WORKFLOW)
 
 
 if __name__ == "__main__":
