@@ -120,10 +120,10 @@ extension Button where Label == SwiftUI.Label<Text, Image> {
     }
 }
 
-// MARK: - Conformances -
-
-extension Button: ActionLabelView {
-    public init(action: Action, @ViewBuilder label: () -> Label) {
-        self.init(action: action.perform, label: label)
-    }
-}
+// SwiftUI.Button already has a native `init(action:label:)`. Do not make it
+// conform to ActionLabelView here: the protocol's default closure initializer
+// delegates to `init(action: Action)`, while the Button conformance used to
+// delegate back to that very same closure initializer. On the iOS 16 runtime
+// this results in unbounded recursion during initial SwiftUI view creation,
+// followed by EXC_BAD_ACCESS/SIGSEGV from stack exhaustion. Keep the protocol
+// for the SwiftUIX-specific button views without shadowing SwiftUI.Button.

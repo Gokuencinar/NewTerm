@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CONTROLLER = (ROOT / "Common/Controllers/TerminalController.swift").read_text(encoding="utf-8")
 SUBPROCESS = (ROOT / "Common/Controllers/SubProcess.swift").read_text(encoding="utf-8")
 WORKFLOW = (ROOT / ".github/workflows/build.yml").read_text(encoding="utf-8")
+ACTION_LABEL_VIEW = (ROOT / "Deps/SwiftUIX/Sources/Intramodular/Control/ActionLabelView.swift").read_text(encoding="utf-8")
 
 
 class NewTermRootHideQueueTests(unittest.TestCase):
@@ -51,6 +52,13 @@ class NewTermRootHideQueueTests(unittest.TestCase):
         self.assertIn("https://github.com/roothide/theos.git", WORKFLOW)
         self.assertIn("ROOTHIDE=1", WORKFLOW)
         self.assertIn("iphoneos-arm64e", WORKFLOW)
+
+    def test_swiftui_button_does_not_recurse_between_action_initializers(self):
+        # Hardware: 2026-10-21 16:19:30 NewTerm SIGSEGV stack repeats
+        # ActionLabelView.init(action:label:) <-> Button.init(action:label:).
+        self.assertIn("public protocol ActionLabelView", ACTION_LABEL_VIEW)
+        self.assertIn("extension ActionLabelView", ACTION_LABEL_VIEW)
+        self.assertNotIn("extension Button: ActionLabelView", ACTION_LABEL_VIEW)
 
 
 if __name__ == "__main__":
