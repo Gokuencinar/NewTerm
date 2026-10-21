@@ -127,3 +127,12 @@ extension Button where Label == SwiftUI.Label<Text, Image> {
 // this results in unbounded recursion during initial SwiftUI view creation,
 // followed by EXC_BAD_ACCESS/SIGSEGV from stack exhaustion. Keep the protocol
 // for the SwiftUIX-specific button views without shadowing SwiftUI.Button.
+
+// Existing SwiftUIX call sites use Button(toggle:label:) for checkbox and
+// presentation bindings. Retain that small convenience initializer directly,
+// without the ActionLabelView conformance or its recursive Action forwarding.
+extension Button {
+    public init(toggle boolean: Binding<Bool>, @ViewBuilder label: () -> Label) {
+        self.init(action: { boolean.wrappedValue.toggle() }, label: label)
+    }
+}
