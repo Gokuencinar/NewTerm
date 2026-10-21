@@ -202,17 +202,15 @@ public class TerminalController {
 	// MARK: - Terminal
 
 	public func readInputStream(_ data: [UTF8Char]) {
-        var buflen = 0
         bufferLock.lock()
         self.readBuffer += data
-        buflen = self.readBuffer.count
         bufferLock.unlock()
-        
-        if buflen > 100 {
-            terminalQueue.sync {
-                //waiting for terminal to process buffer
-            }
-        }
+
+        // updateScreenSize() can call this from terminalQueue itself when
+        // displaying a subprocess startup error. Synchronously dispatching
+        // back to that same serial queue triggers __DISPATCH_WAIT_FOR_QUEUE__
+        // / EXC_BREAKPOINT and prevents NewTerm from opening. The display
+        // timer already drains readBuffer on terminalQueue under bufferLock.
 	}
 
 	private func readInputStream(_ data: Data) {
