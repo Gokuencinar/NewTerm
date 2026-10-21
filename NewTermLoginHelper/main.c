@@ -34,14 +34,27 @@ int main(int argc, char *argv[]) {
 
 	// Construct command line to exec by replacing argv[2] with shell basename preceded by "-", which
 	// indicates to the shell that it is being launched by login(1).
-	char *program = malloc(strlen(argv[2]));
-	strcpy(program, argv[2]);
-	asprintf(&argv[2], "-%s", basename(program));
+	// Allocate room for the NUL terminator; the previous malloc(strlen())
+	// overflowed by one byte when copying the shell path.
+	char *program = strdup(argv[2]);
+	if (!program) {
+		perror("strdup()");
+		return 1;
+	}
+	char *loginArg0 = NULL;
+	if (asprintf(&loginArg0, "-%s", basename(program)) < 0) {
+		perror("asprintf()");
+		free(program);
+		return 1;
+	}
+	argv[2] = loginArg0;
 
 	// Now exec the shell, using our supplied command line from argv[2] onwards.
 	execvp(program, (char **)&argv[2]);
 
 	// If we got to here, exec failed. Print the error.
 	perror(program);
+	free(loginArg0);
+	free(program);
 	return 1;
 }

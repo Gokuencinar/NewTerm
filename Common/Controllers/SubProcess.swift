@@ -220,7 +220,26 @@ class SubProcess {
 		var pid = pid_t()
 		// Use the existing hidden RootHide login executable directly. rootfs()
 		// strips its hidden-root prefix and can target a missing stock /usr/bin/login.
-		let result = ie_posix_spawn(&pid, (Self.login as NSString).utf8String, &actions, &attr, argv, envp)
+		var result = ie_posix_spawn(&pid, (Self.login as NSString).utf8String, &actions, &attr, argv, envp)
+		// Some experimental RootHide setups reject the bootstrap's login Mach-O
+		// (EBADEXEC/85) before it can invoke our helper. Recover only that exact
+		// error by executing our own, separately signed, bundled helper directly.
+		// The helper creates the controlling tty and then execs the account shell.
+		// This fallback keeps the app's uid/gid (it does NOT emulate login -fp or
+		// perform a privilege transition). Never use it on other spawn failures.
+		if result == EBADEXEC && !Self.loginIsShell &&
+			FileManager.default.isExecutableFile(atPath: Self.loginHelper) {
+			logger.error("Login executable rejected (EBADEXEC/85): \(Self.login, privacy: .public); trying bundled unprivileged helper")
+			let fallbackArgv = ["-NewTermLoginHelper", initialDirectory ?? Self.homeDirectory, Self.shell].cStringArray
+			defer { fallbackArgv.deallocate() }
+			pid = pid_t()
+			result = ie_posix_spawn(&pid, (Self.loginHelper as NSString).utf8String, &actions, &attr, fallbackArgv, envp)
+			if result == 0 {
+				logger.notice("Bundled NewTermLoginHelper fallback started; current app identity retained")
+			} else {
+				logger.error("Bundled login helper also failed: \(result, format: .darwinErrno)")
+			}
+		}
 		close(fds.replica)
 		if result != 0 {
 			// Fork failed.
